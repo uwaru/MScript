@@ -2,13 +2,13 @@
 set -e
 
 # ==========
-# MScript 依赖安装脚本
+# MScript 依赖安装脚本（已添加 unzip）
 # ==========
 
 echo "🔧 开始安装 MScript 所需依赖..."
 echo ""
 
-# 基础依赖包列表
+# 基础依赖包列表（已加入 unzip）
 BASE_PKGS=(curl openssl wget gzip socat git unzip)
 PYTHON_PKG=""
 PIP_PKG=""
@@ -88,6 +88,7 @@ else
     echo "  - gzip"
     echo "  - socat"
     echo "  - git"
+    echo "  - unzip"
     echo "  - python3"
     echo "  - pip3"
     echo "  - uuidgen (包名: uuid-runtime 或 util-linux)"
@@ -99,7 +100,7 @@ echo "🔍 验证系统依赖安装..."
 
 # 验证所有必要命令是否可用
 MISSING_CMDS=()
-for cmd in curl wget gzip openssl uuidgen socat git python3; do
+for cmd in curl wget gzip openssl uuidgen socat git python3 unzip; do
     if ! command -v "$cmd" &>/dev/null; then
         MISSING_CMDS+=("$cmd")
     fi
@@ -170,6 +171,7 @@ echo "  ✓ gzip      - 文件压缩/解压"
 echo "  ✓ openssl   - SSL/TLS 工具"
 echo "  ✓ socat     - 网络工具 (acme.sh 需要)"
 echo "  ✓ git       - 版本控制工具"
+echo "  ✓ unzip     - 文件解压"
 echo "  ✓ uuidgen   - UUID 生成器"
 echo ""
 echo "已安装的 Python 环境:"
