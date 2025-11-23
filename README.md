@@ -54,7 +54,7 @@ wget https://github.com/uwaru/MScript/archive/refs/heads/main.zip&&unzip main.zi
 2. 安装依赖
 
 ```
-wget https://raw.githubusercontent.com/uwaru/MScript/refs/heads/main/install_dependencies.sh&&bash install_dependencies.sh
+bash install_dependencies.sh
 ```
 
 3. 运行主程序
