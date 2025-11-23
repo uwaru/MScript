@@ -455,6 +455,12 @@ class MihomoBase(ABC):
     # ============================= Mihomo---Systemd与Docker部署 =============================
     # install_mihomo(self, bin_arch, level): 下载并安装 Mihomo
     # create_systemd_service(self): 创建 systemd 服务
+    # check_docker(self): 检查 Docker 和 Docker Compose 是否已安装
+    # _check_docker_compose_plugin(self): 检查 docker compose (作为插件) 是否可用
+    # get_deployment_method(self): 让用户选择部署方式
+    # install_docker(self): 安装 Docker 和 Docker Compose
+    # create_docker_compose_file(self, config_dir, protocol_name, port=None): 创建 Docker Compose 配置文件
+    # start_docker_service(self, config_dir): 启动 Docker 服务
 
     def install_mihomo(self, bin_arch, level):
         """下载并安装 Mihomo"""
@@ -530,6 +536,196 @@ WantedBy=multi-user.target
 
         time.sleep(2)
 
+    def check_docker(self):
+        """检查 Docker 和 Docker Compose 是否已安装"""
+        has_docker = self.check_command("docker")
+        has_compose = self.check_command("docker-compose") or self.check_command(
+            "docker") and self._check_docker_compose_plugin()
+
+        return has_docker and has_compose
+
+    def _check_docker_compose_plugin(self):
+        """检查 docker compose (作为插件) 是否可用"""
+        try:
+            subprocess.run(
+                ["docker", "compose", "version"],
+                capture_output=True,
+                timeout=5
+            )
+            return True
+        except:
+            return False
+
+    def get_deployment_method(self):
+        """让用户选择部署方式"""
+        print("\n" + "=" * 42)
+        print("📦 选择部署方式")
+        print("=" * 42 + "\n")
+
+        print("  1. 直接部署 (systemd 服务)")
+        print("  2. Docker 部署 (容器化)")
+
+        # 检查 Docker 是否可用
+        has_docker = self.check_docker()
+        if not has_docker:
+            print("\n⚠️ 注意: 未检测到 Docker 或 Docker Compose")
+            print("   如需使用 Docker 部署,请先安装:")
+            print("   - Docker: curl -fsSL https://get.docker.com | sh")
+            print("   - 或参考: https://docs.docker.com/engine/install/")
+
+        while True:
+            choice = input("\n请选择部署方式 (1/2): ").strip()
+            if choice == '1':
+                return 'systemd'
+            elif choice == '2':
+                if not has_docker:
+                    print("❌ Docker 未安装,无法使用此选项")
+                    install_choice = input("是否现在安装 Docker? (y/n): ").strip().lower()
+                    if install_choice in ['y', 'yes']:
+                        self.install_docker()
+                        return 'docker'
+                    else:
+                        continue
+                return 'docker'
+            else:
+                print("❌ 无效选项,请重新输入")
+
+    def install_docker(self):
+        """安装 Docker 和 Docker Compose"""
+        print("\n🐳 开始安装 Docker...")
+
+        try:
+            # 使用官方安装脚本
+            print("📥 下载 Docker 安装脚本...")
+            subprocess.run(
+                "curl -fsSL https://get.docker.com -o /tmp/get-docker.sh",
+                shell=True,
+                check=True,
+                timeout=60
+            )
+
+            print("🔧 执行安装...")
+            subprocess.run(
+                "sh /tmp/get-docker.sh",
+                shell=True,
+                check=True,
+                timeout=300
+            )
+
+            # 启动 Docker 服务
+            sh.systemctl("start", "docker")
+            sh.systemctl("enable", "docker")
+
+            print("✅ Docker 安装完成")
+
+        except Exception as e:
+            print(f"❌ Docker 安装失败: {e}")
+            print("\n请手动安装 Docker:")
+            print("  https://docs.docker.com/engine/install/")
+            sys.exit(1)
+
+    from pathlib import Path
+
+    def create_docker_compose_file(self, config_dir, protocol_name, port=None):
+        """创建 Docker Compose 配置文件"""
+
+        config_dir_abs = Path(config_dir).resolve()
+
+        cert_file = config_dir_abs / "server.crt"
+        key_file = config_dir_abs / "server.key"
+
+        # 逐行构造docker配置
+        lines = [
+            "services:",
+            "  mihomo:",
+            "    container_name: mihomo",
+            "    image: metacubex/mihomo:latest",
+            "    restart: unless-stopped",
+            "    environment:",
+            "      - TZ=Asia/Shanghai",
+            "    volumes:",
+            f"      - {config_dir_abs}/config.yaml:/root/.config/mihomo/config.yaml:ro"
+        ]
+
+        # 插入证书
+        if cert_file.exists() and key_file.exists():
+            lines += [
+                f"      - {config_dir_abs}/server.crt:/root/.config/mihomo/server.crt:ro",
+                f"      - {config_dir_abs}/server.key:/root/.config/mihomo/server.key:ro",
+            ]
+
+        lines.append("    network_mode: host")
+
+        compose_content = "\n".join(lines)
+
+        compose_file = config_dir_abs / "docker-compose.yml"
+        compose_file.write_text(compose_content, encoding="utf-8")
+
+        print(f"✅ Docker Compose 配置已生成: {compose_file}")
+        print("\n生成的配置内容:")
+        print(compose_content)
+        return compose_file
+
+    def start_docker_service(self, config_dir):
+        """启动 Docker 服务"""
+        print("\n🐳 启动 Docker 容器...")
+
+        try:
+            # 切换到配置目录
+            import os
+            original_dir = os.getcwd()
+            os.chdir(config_dir)
+
+            # 优先使用 docker compose (新版本)
+            try:
+                result = subprocess.run(
+                    ["docker", "compose", "up", "-d"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode != 0:
+                    print(f"错误输出:\n{result.stderr}")
+                    raise Exception(f"Docker compose 启动失败: {result.stderr}")
+            except FileNotFoundError:
+                # 回退到 docker-compose (旧版本)
+                result = subprocess.run(
+                    ["docker-compose", "up", "-d"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode != 0:
+                    print(f"错误输出:\n{result.stderr}")
+                    raise Exception(f"Docker compose 启动失败: {result.stderr}")
+
+            os.chdir(original_dir)
+
+            print("✅ Docker 容器已启动")
+
+            # 等待容器启动
+            import time
+            time.sleep(3)
+
+            # 显示容器状态
+            print("\n📊 容器状态:")
+            try:
+                subprocess.run(["docker", "ps", "-a", "--filter", "name=mihomo"], check=False)
+            except:
+                pass
+
+        except Exception as e:
+            print(f"❌ 启动容器失败: {e}")
+            # 显示生成的配置文件内容用于调试
+            try:
+                compose_file = config_dir / "docker-compose.yml"
+                if compose_file.exists():
+                    print(f"\n生成的 docker-compose.yml 内容:")
+                    print(compose_file.read_text())
+            except:
+                pass
+            sys.exit(1)
+
     # ============================= 抽象方法 - 每个协议部署类必须实现 =============================
     # get_deployment_config(self): 获取部署配置 - 子类实现
     # generate_config(self, **kwargs): 生成协议配置 - 子类实现
@@ -563,65 +759,152 @@ WantedBy=multi-user.target
         print("🗑️ 开始卸载 Mihomo")
         print("=" * 46 + "\n")
 
-        print("⚠️ 警告: 此操作将删除以下内容:")
-        print("  1. Mihomo 程序文件")
-        print("  2. Mihomo 配置文件")
-        print("  3. SSL 证书文件")
-        print("  4. systemd 服务文件")
-        print("  5. acme.sh 中的证书配置\n")
+        # 检测部署方式
+        docker_compose_file = self.cert_dir / "docker-compose.yml"
+        is_docker_deployment = docker_compose_file.exists()
+
+        if is_docker_deployment:
+            print("📦 检测到 Docker 部署\n")
+            print("⚠️ 警告: 此操作将删除以下内容:")
+            print("  1. Mihomo Docker 容器")
+            print("  2. Mihomo 配置文件")
+            print("  3. SSL 证书文件")
+            print("  4. Docker Compose 配置文件")
+            print("  5. Mihomo Docker 镜像(可选)")
+            print("  6. acme.sh 中的证书配置\n")
+        else:
+            print("⚠️ 警告: 此操作将删除以下内容:")
+            print("  1. Mihomo 程序文件")
+            print("  2. Mihomo 配置文件")
+            print("  3. SSL 证书文件")
+            print("  4. systemd 服务文件")
+            print("  5. acme.sh 中的证书配置\n")
 
         confirm = input("确认卸载? (yes/no): ").strip().lower()
         if confirm != 'yes':
             print("❌ 已取消卸载")
             return
 
-        # 停止并禁用服务
-        print("\n🛑 停止 Mihomo 服务...")
-        try:
-            sh.systemctl("stop", "mihomo", _ok_code=[0, 5])
-            sh.systemctl("disable", "mihomo", _ok_code=[0, 1])
-            print("✅ 服务已停止")
-        except Exception as e:
-            print(f"⚠️ 停止服务失败: {e}")
+        if is_docker_deployment:
+            # Docker 部署的卸载流程
+            print("\n🐳 处理 Docker 容器...")
 
-        # 删除 systemd 服务文件
-        print("\n🗑 删除 systemd 服务文件...")
-        service_file = Path("/etc/systemd/system/mihomo.service")
-        if service_file.exists():
+            # 停止并删除容器
             try:
-                service_file.unlink()
-                sh.systemctl("daemon-reload")
-                print("✅ 服务文件已删除")
-            except Exception as e:
-                print(f"⚠️ 删除服务文件失败: {e}")
-        else:
-            print("⚠️ 服务文件不存在")
+                import os
+                original_dir = os.getcwd()
+                os.chdir(self.cert_dir)
 
-        # 删除 Mihomo 程序
-        print("\n🗑️ 删除 Mihomo 程序...")
-        mihomo_bin = Path("/usr/local/bin/mihomo")
-        if mihomo_bin.exists():
+                print("🛑 停止容器...")
+                try:
+                    subprocess.run(
+                        ["docker", "compose", "down"],
+                        timeout=30,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                except:
+                    # 回退到旧版本命令
+                    subprocess.run(
+                        ["docker-compose", "down"],
+                        timeout=30,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+
+                os.chdir(original_dir)
+                print("✅ 容器已停止并删除")
+
+            except Exception as e:
+                print(f"⚠️ 停止容器失败: {e}")
+
+            # 询问是否删除镜像
+            print("\n🗑️ 处理 Docker 镜像...")
+            remove_image = input("是否删除 Mihomo Docker 镜像? (y/n): ").strip().lower()
+
+            if remove_image in ['y', 'yes']:
+                try:
+                    # 查找 mihomo 相关镜像
+                    result = subprocess.run(
+                        ["docker", "images", "-q", "metacubex/mihomo"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+
+                    if result.stdout.strip():
+                        subprocess.run(
+                            ["docker", "rmi", "-f"] + result.stdout.strip().split('\n'),
+                            timeout=30
+                        )
+                        print("✅ Mihomo 镜像已删除")
+                    else:
+                        print("⚠️ 未找到 Mihomo 镜像")
+
+                except Exception as e:
+                    print(f"⚠️ 删除镜像失败: {e}")
+
+            # 删除配置目录
+            print("\n🗑 删除配置目录...")
+            if self.cert_dir.exists():
+                try:
+                    import shutil
+                    shutil.rmtree(self.cert_dir)
+                    print(f"✅ 配置目录已删除: {self.cert_dir}")
+                except Exception as e:
+                    print(f"⚠️ 删除配置目录失败: {e}")
+            else:
+                print("⚠️ 配置目录不存在")
+
+        else:
+            # 原有的 systemd 部署卸载流程
+            # 停止并禁用服务
+            print("\n🛑 停止 Mihomo 服务...")
             try:
-                mihomo_bin.unlink()
-                print("✅ Mihomo 程序已删除")
+                sh.systemctl("stop", "mihomo", _ok_code=[0, 5])
+                sh.systemctl("disable", "mihomo", _ok_code=[0, 1])
+                print("✅ 服务已停止")
             except Exception as e:
-                print(f"⚠️ 删除程序失败: {e}")
-        else:
-            print("⚠️ Mihomo 程序不存在")
+                print(f"⚠️ 停止服务失败: {e}")
 
-        # 删除配置目录
-        print("\n🗑 删除配置目录...")
-        if self.cert_dir.exists():
-            try:
-                import shutil
-                shutil.rmtree(self.cert_dir)
-                print(f"✅ 配置目录已删除: {self.cert_dir}")
-            except Exception as e:
-                print(f"⚠️ 删除配置目录失败: {e}")
-        else:
-            print("⚠️ 配置目录不存在")
+            # 删除 systemd 服务文件
+            print("\n🗑 删除 systemd 服务文件...")
+            service_file = Path("/etc/systemd/system/mihomo.service")
+            if service_file.exists():
+                try:
+                    service_file.unlink()
+                    sh.systemctl("daemon-reload")
+                    print("✅ 服务文件已删除")
+                except Exception as e:
+                    print(f"⚠️ 删除服务文件失败: {e}")
+            else:
+                print("⚠️ 服务文件不存在")
 
-        # 可选: 删除 acme.sh 证书
+            # 删除 Mihomo 程序
+            print("\n🗑️ 删除 Mihomo 程序...")
+            mihomo_bin = Path("/usr/local/bin/mihomo")
+            if mihomo_bin.exists():
+                try:
+                    mihomo_bin.unlink()
+                    print("✅ Mihomo 程序已删除")
+                except Exception as e:
+                    print(f"⚠️ 删除程序失败: {e}")
+            else:
+                print("⚠️ Mihomo 程序不存在")
+
+            # 删除配置目录
+            print("\n🗑 删除配置目录...")
+            if self.cert_dir.exists():
+                try:
+                    import shutil
+                    shutil.rmtree(self.cert_dir)
+                    print(f"✅ 配置目录已删除: {self.cert_dir}")
+                except Exception as e:
+                    print(f"⚠️ 删除配置目录失败: {e}")
+            else:
+                print("⚠️ 配置目录不存在")
+
+        # 处理 acme.sh 证书(两种部署方式都可能有)
         print("\n🗑 处理 SSL 证书...")
         if self.acme_sh.exists():
             try:
@@ -664,8 +947,18 @@ WantedBy=multi-user.target
         print("\n" + "=" * 46)
         print("✅ 卸载完成!")
         print("=" * 46 + "\n")
-        print("ℹ️ 说明:")
-        print("  - acme.sh 本身未被删除(可能被其他应用使用)")
-        print("  - 如需完全删除 acme.sh, 请运行:")
-        print(f"    {self.acme_sh} --uninstall")
-        print(f"    rm -rf {self.home}/.acme.sh\n")
+
+        if is_docker_deployment:
+            print("ℹ️ 说明:")
+            print("  - acme.sh 本身未被删除(可能被其他应用使用)")
+            print("  - 如需完全删除 acme.sh, 请运行:")
+            print(f"    {self.acme_sh} --uninstall")
+            print(f"    rm -rf {self.home}/.acme.sh")
+            print("  - 如需清理未使用的 Docker 资源:")
+            print("    docker system prune -a\n")
+        else:
+            print("ℹ️ 说明:")
+            print("  - acme.sh 本身未被删除(可能被其他应用使用)")
+            print("  - 如需完全删除 acme.sh, 请运行:")
+            print(f"    {self.acme_sh} --uninstall")
+            print(f"    rm -rf {self.home}/.acme.sh\n")
