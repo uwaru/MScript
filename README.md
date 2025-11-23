@@ -45,7 +45,7 @@ MScript 是一个基于 Mihomo 的多协议部署管理工具,提供友好的交
 
 ### 一键安装
 
-1. 下载仓库并设置工作目录
+1. 下载仓库并设置工作目录(这一步可能需要先安装unzip，请使用sudo apt install unzip命令安装。)
 
 ```bash
 wget https://github.com/uwaru/MScript/archive/refs/heads/main.zip&&unzip main.zip&&cd MScript-main
