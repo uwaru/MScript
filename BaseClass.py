@@ -18,11 +18,19 @@ from abc import ABC, abstractmethod
 class MihomoBase(ABC):
     """Mihomo 部署基础类"""
 
+    # ============================= 初始化 =============================
     def __init__(self):
         self.home = Path.home()
-        self.cert_dir = Path("/root/.config/mihomo")
-        self.acme_sh = self.home / ".acme.sh" / "acme.sh"
+        self.cert_dir = Path("/root/.config/mihomo")  # Mihomo位置
+        self.acme_sh = self.home / ".acme.sh" / "acme.sh"  # Acme.sh位置
         self.protocol_name = "Unknown"  # 子类需要覆盖
+
+    # ============================= 通用方法 =============================
+    # random_free_port(self): 生成随机可用端口
+    # check_command(self, cmd)：检查命令是否存在
+    # check_dependencies(self): 检查必要的依赖是否已安装
+    # detect_architecture(self): 检测系统架构
+    # get_public_ip(self): 获取公网IP
 
     def random_free_port(self):
         """生成随机可用端口"""
@@ -94,50 +102,50 @@ class MihomoBase(ABC):
         print(f"🧠 检测到 CPU 架构: {arch}, 指令集等级: {level}")
         return bin_arch, level
 
-    def install_mihomo(self, bin_arch, level):
-        """下载并安装 Mihomo"""
-        if self.check_command("mihomo"):
-            print("✅ 已检测到 mihomo,跳过安装步骤")
-            return
-
-        print("⬇️ 正在安装 mihomo ...")
-
+    def get_public_ip(self):
+        """获取公网 IP"""
         try:
-            # 获取最新版本
-            response = sh.curl("-s", "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest")
-            data = json.loads(str(response))
-            latest_version = data["tag_name"]
-
-            if not latest_version:
-                print("❌ 获取版本号失败")
-                sys.exit(1)
-
-            # 构建下载 URL
-            if bin_arch == "amd64":
-                file_name = f"mihomo-linux-{bin_arch}-{level}-{latest_version}.gz"
-            else:
-                file_name = f"mihomo-linux-{bin_arch}-{latest_version}.gz"
-
-            download_url = f"https://github.com/MetaCubeX/mihomo/releases/download/{latest_version}/{file_name}"
-
-            print(f"📦 下载 {file_name} ...")
+            return sh.curl("-s", "ifconfig.me").strip()
+        except:
             try:
-                sh.wget("-O", "/tmp/mihomo.gz", download_url, _fg=True)
+                return sh.curl("-s", "icanhazip.com").strip()
             except:
-                print(f"⚠️ 下载 {level} 版本失败,尝试兼容版本...")
-                file_name = f"mihomo-linux-{bin_arch}-compatible-{latest_version}.gz"
-                download_url = f"https://github.com/MetaCubeX/mihomo/releases/download/{latest_version}/{file_name}"
-                sh.wget("-O", "/tmp/mihomo.gz", download_url, _fg=True)
+                return "获取失败"
 
-            # 解压并安装
-            sh.gzip("-d", "/tmp/mihomo.gz")
-            sh.chmod("+x", "/tmp/mihomo")
-            sh.mv("/tmp/mihomo", "/usr/local/bin/mihomo")
+    # ============================= 证书相关 =============================
+    # validate_domain(self, domain): 验证域名格式
+    # install_acme_sh(self, email): 验证邮箱格式
+    # install_acme_sh(self, email): 安装 acme.sh
+    # generate_self_signed_cert(self, domain): 生成自签证书
+    # request_certificate(self, domain, email): 申请 SSL 证书
 
-            print("✅ mihomo 安装完成")
-        except Exception as e:
-            print(f"❌ mihomo 安装失败: {e}")
-            sys.exit(1)
+    def validate_domain(self, domain):
+        """验证域名格式"""
+        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        return re.match(domain_pattern, domain) is not None
+
+    def validate_email(self, email):
+        """验证邮箱格式"""
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+        if not re.match(email_pattern, email):
+            return False
+
+        # 检查是否使用了 Let's Encrypt 禁止的测试域名
+        forbidden_domains = [
+            'example.com', 'example.org', 'example.net',
+            'test.com', 'test.org', 'test.net',
+            'localhost.com', 'invalid.com',
+            'invalid', 'local', 'localhost'
+        ]
+
+        email_domain = email.split('@')[1].lower()
+        if email_domain in forbidden_domains:
+            print(f"❌ 不能使用测试域名 '{email_domain}' 作为邮箱")
+            print("   请使用真实的邮箱地址(如 Gmail, Outlook 等)")
+            return False
+
+        return True
 
     def install_acme_sh(self, email):
         """安装 acme.sh"""
@@ -316,6 +324,55 @@ class MihomoBase(ABC):
 
         print("🎉 证书获取并安装成功!")
 
+    # ============================= Mihomo---Systemd与Docker部署 =============================
+    # install_mihomo(self, bin_arch, level): 下载并安装 Mihomo
+    # create_systemd_service(self): 创建 systemd 服务
+
+    def install_mihomo(self, bin_arch, level):
+        """下载并安装 Mihomo"""
+        if self.check_command("mihomo"):
+            print("✅ 已检测到 mihomo,跳过安装步骤")
+            return
+
+        print("⬇️ 正在安装 mihomo ...")
+
+        try:
+            # 获取最新版本
+            response = sh.curl("-s", "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest")
+            data = json.loads(str(response))
+            latest_version = data["tag_name"]
+
+            if not latest_version:
+                print("❌ 获取版本号失败")
+                sys.exit(1)
+
+            # 构建下载 URL
+            if bin_arch == "amd64":
+                file_name = f"mihomo-linux-{bin_arch}-{level}-{latest_version}.gz"
+            else:
+                file_name = f"mihomo-linux-{bin_arch}-{latest_version}.gz"
+
+            download_url = f"https://github.com/MetaCubeX/mihomo/releases/download/{latest_version}/{file_name}"
+
+            print(f"📦 下载 {file_name} ...")
+            try:
+                sh.wget("-O", "/tmp/mihomo.gz", download_url, _fg=True)
+            except:
+                print(f"⚠️ 下载 {level} 版本失败,尝试兼容版本...")
+                file_name = f"mihomo-linux-{bin_arch}-compatible-{latest_version}.gz"
+                download_url = f"https://github.com/MetaCubeX/mihomo/releases/download/{latest_version}/{file_name}"
+                sh.wget("-O", "/tmp/mihomo.gz", download_url, _fg=True)
+
+            # 解压并安装
+            sh.gzip("-d", "/tmp/mihomo.gz")
+            sh.chmod("+x", "/tmp/mihomo")
+            sh.mv("/tmp/mihomo", "/usr/local/bin/mihomo")
+
+            print("✅ mihomo 安装完成")
+        except Exception as e:
+            print(f"❌ mihomo 安装失败: {e}")
+            sys.exit(1)
+
     def create_systemd_service(self):
         """创建 systemd 服务"""
         service_content = f"""[Unit]
@@ -345,45 +402,12 @@ WantedBy=multi-user.target
 
         time.sleep(2)
 
-    def get_public_ip(self):
-        """获取公网 IP"""
-        try:
-            return sh.curl("-s", "ifconfig.me").strip()
-        except:
-            try:
-                return sh.curl("-s", "icanhazip.com").strip()
-            except:
-                return "获取失败"
+    # ============================= 抽象方法 - 每个协议部署类必须实现 =============================
+    # get_deployment_config(self): 获取部署配置 - 子类实现
+    # generate_config(self, **kwargs): 生成协议配置 - 子类实现
+    # print_final_info(self, **kwargs): 输出最终配置信息 - 子类实现
+    # install(self): 安装协议
 
-    def validate_domain(self, domain):
-        """验证域名格式"""
-        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
-        return re.match(domain_pattern, domain) is not None
-
-    def validate_email(self, email):
-        """验证邮箱格式 - 增强版本,排除禁止的域名"""
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-
-        if not re.match(email_pattern, email):
-            return False
-
-        # 检查是否使用了 Let's Encrypt 禁止的测试域名
-        forbidden_domains = [
-            'example.com', 'example.org', 'example.net',
-            'test.com', 'test.org', 'test.net',
-            'localhost.com', 'invalid.com',
-            'invalid', 'local', 'localhost'
-        ]
-
-        email_domain = email.split('@')[1].lower()
-        if email_domain in forbidden_domains:
-            print(f"❌ 不能使用测试域名 '{email_domain}' 作为邮箱")
-            print("   请使用真实的邮箱地址(如 Gmail, Outlook 等)")
-            return False
-
-        return True
-
-    # 抽象方法 - 子类必须实现
     @abstractmethod
     def get_deployment_config(self):
         """获取部署配置 - 子类实现"""
@@ -404,6 +428,7 @@ WantedBy=multi-user.target
         """安装协议 - 子类实现完整流程"""
         pass
 
+    # ============================= 卸载 =============================
     def uninstall(self):
         """卸载 Mihomo 及相关文件"""
         print("\n" + "=" * 46)
