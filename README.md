@@ -2,6 +2,7 @@
 
 <div align="center">
 
+
 **一键部署多种代理协议的自动化脚本**
 
 </div>
@@ -44,19 +45,22 @@ MScript 是一个基于 Mihomo 的多协议部署管理工具,提供友好的交
 
 ### 一键安装
 
-1. 安装依赖
-```bash
-wget https://raw.githubusercontent.com/uwaru/MScript/refs/heads/main/install_dependencies.sh&&bash install_dependencies.sh
-```
+1. 下载仓库并设置工作目录
 
-2. 下载仓库并设置工作目录
-```
+```bash
 wget https://github.com/uwaru/MScript/archive/refs/heads/main.zip&&unzip main.zip&&cd MScript-main
 ```
 
-3. 运行主程序
+2. 安装依赖
+
 ```
-python3 MScript.py
+wget https://raw.githubusercontent.com/uwaru/MScript/refs/heads/main/install_dependencies.sh&&bash install_dependencies.sh
+```
+
+3. 运行主程序
+
+```
+cd MScript-main $$ bash run.sh
 ```
 
 ### 手动安装依赖
@@ -225,6 +229,7 @@ sudo firewall-cmd --reload
 
 
 
+
 A: 请检查:
 
 1. 域名是否正确解析到服务器 IP
@@ -326,6 +331,7 @@ systemctl daemon-reload
 ------
 
 <div align="center">
+
 
 
 
