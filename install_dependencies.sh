@@ -185,16 +185,6 @@ else
     exit 1
 fi
 
-echo ""
-echo "📁 进入 MScript 目录..."
-
-cd ./MScript-main || {
-    echo "❌ 未找到 MScript-main 目录"
-    exit 1
-}
-
-echo "📁 已进入 $(pwd)"
-
 # 创建虚拟环境
 echo "🐍 创建虚拟环境 mscript-env..."
 if [ -d "mscript-env" ]; then
