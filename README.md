@@ -60,7 +60,7 @@ bash install_dependencies.sh
 3. 运行主程序
 
 ```
-cd MScript-main $$ bash run.sh
+bash run.sh
 ```
 
 ### 手动安装依赖
