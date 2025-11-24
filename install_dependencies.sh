@@ -282,6 +282,24 @@ else
     exit 1
 fi
 
+# 安装 pyyaml 库
+echo "📦 正在安装 pyyaml 库..."
+$PIP_CMD install pyyaml || {
+    echo "❌ pyyaml 库安装失败"
+    deactivate
+    exit 1
+}
+
+# 验证 pyyaml 库是否安装成功
+if python -c "import yaml" 2>/dev/null; then
+    echo "✓ pyyaml 库安装成功"
+else
+    echo "❌ pyyaml 库安装失败"
+    echo "请手动安装: pip install pyyaml"
+    deactivate
+    exit 1
+fi
+
 # 退出虚拟环境
 deactivate
 echo "🚪 已退出虚拟环境"
@@ -305,6 +323,7 @@ echo "  ✓ python3   - Python 解释器 (版本 $PYTHON_VERSION)"
 echo "  ✓ pip       - Python 包管理器 (版本 $PIP_VERSION)"
 echo "  ✓ venv      - Python 虚拟环境"
 echo "  ✓ sh        - Python Shell 命令库"
+echo "  ✓ pyyaml    - Python yaml  命令库"
 echo ""
 echo "虚拟环境位置:"
 echo "  📁 $(pwd)/mscript-env"

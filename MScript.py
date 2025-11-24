@@ -12,6 +12,7 @@ from Mieru import MieruInstaller
 from Tuic import TuicInstaller
 from Hysteria import HysteriaInstaller
 from Trojan import TrojanInstaller
+from VlessEncryption import VlessEncryptionInstaller
 
 
 class MihomoManager:
@@ -49,6 +50,11 @@ class MihomoManager:
                 'name': 'Trojan',
                 'description': 'Trojan 协议 - 支持 TLS 和 Reality 模式',
                 'installer': TrojanInstaller
+            },
+            '7': {
+                'name': 'VLESS Encryption',
+                'description': 'VLESS Encryption - 后量子安全加密协议',
+                'installer': VlessEncryptionInstaller
             }
         }
 
