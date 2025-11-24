@@ -58,8 +58,8 @@ class MihomoManager:
             }
         }
 
-        def print_banner(self):
-            """打印程序横幅"""
+    def print_banner(self):
+        """打印程序横幅"""
         banner = r"""
     ╔══════════════════════════════════════════════════════════════════════╗
     ║                                                                      ║
