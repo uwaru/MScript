@@ -10,6 +10,7 @@ import sys
 import time
 import random
 import json
+import yaml
 import subprocess
 from pathlib import Path
 from abc import ABC, abstractmethod
@@ -628,39 +629,47 @@ WantedBy=multi-user.target
 
     def create_docker_compose_file(self, config_dir, protocol_name, port=None):
         """创建 Docker Compose 配置文件"""
-
+        
         config_dir_abs = Path(config_dir).resolve()
-
+        
         cert_file = config_dir_abs / "server.crt"
         key_file = config_dir_abs / "server.key"
-
-        # 逐行构造docker配置
-        lines = [
-            "services:",
-            "  mihomo:",
-            "    container_name: mihomo",
-            "    image: metacubex/mihomo:latest",
-            "    restart: unless-stopped",
-            "    environment:",
-            "      - TZ=Asia/Shanghai",
-            "    volumes:",
-            f"      - {config_dir_abs}/config.yaml:/root/.config/mihomo/config.yaml:ro"
-        ]
-
-        # 插入证书
+        
+        # 构造配置字典
+        compose_config = {
+            "services": {
+                "mihomo": {
+                    "container_name": "mihomo",
+                    "image": "metacubex/mihomo:latest",
+                    "restart": "unless-stopped",
+                    "environment": ["TZ=Asia/Shanghai"],
+                    "volumes": [
+                        f"{config_dir_abs}/config.yaml:/root/.config/mihomo/config.yaml:ro"
+                    ],
+                    "network_mode": "host"
+                }
+            }
+        }
+        
+        # 如果证书存在，添加证书挂载
         if cert_file.exists() and key_file.exists():
-            lines += [
-                f"      - {config_dir_abs}/server.crt:/root/.config/mihomo/server.crt:ro",
-                f"      - {config_dir_abs}/server.key:/root/.config/mihomo/server.key:ro",
-            ]
-
-        lines.append("    network_mode: host")
-
-        compose_content = "\n".join(lines)
-
+            compose_config["services"]["mihomo"]["volumes"].extend([
+                f"{config_dir_abs}/server.crt:/root/.config/mihomo/server.crt:ro",
+                f"{config_dir_abs}/server.key:/root/.config/mihomo/server.key:ro"
+            ])
+        
+        # 生成 YAML 内容
+        compose_content = yaml.dump(
+            compose_config,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False
+        )
+        
+        # 写入文件
         compose_file = config_dir_abs / "docker-compose.yml"
         compose_file.write_text(compose_content, encoding="utf-8")
-
+        
         print(f"✅ Docker Compose 配置已生成: {compose_file}")
         print("\n生成的配置内容:")
         print(compose_content)
