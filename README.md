@@ -408,7 +408,7 @@ rm MScript-main -r
 
 ## 📝 更新日志
 
-### v1.5.0 (2025-11-25)
+### v2.0.0 (2025-11-25)
 
 - 正式添加对 Docker 部署的支持
 - 所有的配置生成方式都改为使用 Pyyaml
@@ -426,6 +426,24 @@ rm MScript-main -r
 - ✅ TLS 和 Reality 双模式
 - ✅ 自动证书管理
 - ✅ 完整的服务管理功能
+
+## ⚠️ 目前已知的存在的问题
+1.在使用acme.sh自动更新管理证书时，更新后的证书不会自动替换掉mihomo工作目录下的过期证书，当前脚本版本可以运行以下命令解决该问题：
+#使用普通方式进行安装的（请将example.com替换为你正在使用的域名）
+```
+~/.acme.sh/acme.sh --install-cert -d example.com \
+--key-file       /root/.config/mihomo/server.key \
+--fullchain-file /root/.config/mihomo/server.crt \
+--reloadcmd      "systemctl restart mihomo"
+```
+
+#使用docker方式进行安装的（请将example替换为你正在使用的域名）
+```
+~/.acme.sh/acme.sh --install-cert -d example.com \
+--key-file       /root/.config/mihomo/server.key \
+--fullchain-file /root/.config/mihomo/server.crt \
+--reloadcmd      "docker restart mihomo"
+```
 
 ## 📄 开源协议
 
